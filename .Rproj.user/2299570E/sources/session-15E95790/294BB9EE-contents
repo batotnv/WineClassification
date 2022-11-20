@@ -1,0 +1,1136 @@
+---
+title: "Projekt zaliczeniowy - Uczenie Statystyczne w R"
+author: "Bartosz Nguyen Van"
+date: "30/04/2021"
+output: html_document
+---
+
+<style>
+body {
+text-align: justify}
+</style></br>
+
+# Wprowadzenie do projektu
+
+Projekt jest podzielony na dwie części, w pierwszej z nich został wybrany zbiór danych, a następnie przeprowadzono jego analizę opisową, dodatkowo wykonano także tuningowanie hiperparametrów wybranej techniki ML, natomiast w drugiej części stworzono modele wybranych metod uczenia statystycznego, a na końcu dokonano wyboru najlepszego z nich.
+
+
+#### Biblioteki użyte w projekcie
+
+
+```{r message=F, warning=F}
+library(caret)
+library(psych)
+library(corrplot)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(rpart)       
+library(rpart.plot)   
+library(MASS)
+library(clusterSim)
+library(class)
+library(pROC)
+library(kknn)
+library(kableExtra)
+```
+
+#### Ziarno generatora
+
+```{r}
+#seed
+set.seed(297976)
+```
+
+
+# Część 1
+
+## Wstęp do części 1
+
+Zbiór danych wykorzystywany w projekcie pochodzi ze strony **www.kaggle.com** i zawiera on kilka tysięcy obserwacji zawierających informacje o fiyzkochemicznych cechach win oraz ocenę ich jakości dokonaną przez ekspertów. Jego szczegółowy opis zostanie wykonany w dalszej części projektu.
+
+Dla wspomnianego zestawu danych zostanie wykonana analiza opisowa tj. statystyki opisowe, związki między zmiennymi objaśniającymi, związki między objaśniającą i objaśnianą, analiza danych odstających oraz imputacja braków danych.
+
+Po skończonej analizie opisowej zostanie przeprowadzone tuningowanie hiperparametrów dla techniki KNN.
+
+### Wczytanie danych
+
+```{r}
+#wczytanie danych
+dane <- read.csv("winequalityN.csv")
+
+dim(dane)
+
+raw_dane <- dane
+```
+
+
+
+```{r echo=F}
+kable(dane) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive")) %>%
+  scroll_box(height = "400px")
+
+```
+
+
+### Opis danych
+
+Wino to napój alkoholowy uzyskiwany w wyniku fermentacji moszczu winogronowego (czyli świeżo wyciśniętego soku z winogron). Jest to bardzo skomplikowany proces i nawet po skończonej już fermentacji następuje samo dojrzewanie wina, czyli uzyskanie odpowiedniego aromatu i smaku co może trwać nawet kilkadziesiąt lat. Na smak i jakość wina wpływa bardzo wiele czynników, a ocenę tych aspektów dokonują wyspecjalizowane osoby, czyli sommelierzy. Badają oni wino wyłącznie za pomocą swoich zmysłów, natomiast ciekawe również będzie spojrzenie na ten problem z perspektywy bardziej naukowej, tzn, czy jest możliwa klasyfikacji wina tylko na podstawie badania ich składu fizykochemicznego. Taka analiza pozwoli również na pewne spojrzenie jaki związek mają substancje chemiczne zawarte w tym napoju mają z ich jakością.
+
+Do badania powyższego problemu i budowy modeli klasyfikacyjnych posłużono się zbiorem danych pobranym ze strony kaggle.com, aczkolwiek na tej stronie widnieje informacja, że jego źródłem jest **UCI Machine Learning Repository.**
+
+Zbiór ten zawiera informacje o portugalskim winie "Vinho Verde" zarówno białego jak i czerwonego typu. Znajduje się w nim 6497 obserwacji i 13 następujących zmiennych:
+
+* **objaśniające**
+
+**1 - type - typ wina**
+
+Dwie możliwości - białe lub czerwone.
+
+**2 - fixed acidity - kwasowość stała**
+
+Dotyczy kwasu winowowego, jabłkowego, cytrynowego i bursztynowego, które znajdują się w winogronach (z wyjątkiem kwasu bursztynowego). Kwasy zawarte w winie są jednym z podstawowych czynników decydujących o ich smaku. Wyrażone w [g/dm3].
+
+**3 - volatile acidity - lotna kwasowość**
+
+Dotyczy kwasów octowego, mlekowego, mrówkowego i masłowego. Ich obecności w gotowym winie jest bardzo niepożądana, ich obecności musi zostać wydestylowana przed zakończeniem procesu produkcyjnego, gdyż powoduje nieprzyjemny smak wina. Wyrażone w [g/dm3].
+
+
+**4 - citric acid - kwas cytrynowy**
+
+Odpowiada za tzw. uczucie "świeżości" wina. Wyrażone w [g/dm3].
+
+
+**5 - residual sugar - cukier pozostałościowy**
+
+Zmienna ta odnosi się do poziomu naturalnego cukru z winogron, który nie został poddany procesowi fermentacji i nadal jest obecny w winie. Wyrażone w [g/dm3].
+
+
+**6 - chlorides - chlorki**
+
+Zależy od regionu, z którego pochodzi wino. Największe stężenia mają wina pochodzące z obszarów nadmorskich lub nawadnianych słoną wodą. Wyrażone w [g/dm3].
+
+**7 - free sulfur dioxide - wolny dwutlenek siarki**
+
+Ich zbyt duża ilość jest niepożądana i daje ostry zapach. Charakterystyczna cecha tanich win. Wyrażone w [mg/dm3].
+
+
+
+**8 - total sulfur dioxide - całkowite stężenie dwutlenku siarki**
+
+Całkowita ilość związanego i wolnego dwutlenku siarki. Związek ten dodaje się w celu zwalczania drbonoustrojów oraz zachowania jakości wina i świeżości. Nadmiar jest niepożądany, gdyż wino wydziela wtedy niepożądanych zapach. Wyrażone w [mg/dm3].
+
+
+**9 - density - gęstość**
+
+Gęstość wina, mierzona jest w porównaniu do takiej samej objętości wody. Wyrażone w [g/cm3].
+
+**10 - pH**
+
+Wskaźnik pH mówi o tym jak bardzo dana substancja jest kwasowa lub zasadowa. Większość win ma odczyn kwasowy, tj. ich pH oscyluje w przedziale 2.9-3.9.
+
+
+**11 - sulphates - siarczany**
+
+Są to sole mineralne zawierające siarkę. Odpowiadają w pewien sposób za aromat i smak wina, mają związek z procesem fermentacji. Wyrażone w [g/dm3].
+
+
+**12 - alcohol - zawartość alkoholu**
+
+Procentowa zawartość alkoholu w winie. [%]
+
+
+* **objaśniana**
+
+**13 - quality (score between 0 and 10) - ocena jakości wina (skala 0-10)**
+
+Ocena jakości wina dokonana przez sommelierów. Ostateczna ocena to mediana ich ocen, gdzie 0 to bardzo źle, a 10 to wspaniale.
+ 
+
+
+### Przygotowanie danych
+
+W tej części zestaw danych zostanie przygotowany do wstępnej analizy. 
+
+#### Braki w danych
+
+Pierwszym krokiem będzie sprawdzenie, czy w zbiorze występują braki w danych.
+
+```{r}
+table(is.na(dane))
+str(dane)
+sapply(dane, function(x) sum(is.na(x)))
+
+```
+
+Wszystkie kolumny, gdzie stwierdzono braki danych mają dane o typie numerycznym, w związku z tym braki te zostaną zastąpione średnimi odpowiednych zmiennych.
+
+
+```{r}
+#zastapienie przez srednia
+NA2mean <- function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))
+dane[,-c(1,13)] <- replace(dane[,-c(1,13)], TRUE, lapply(dane[,-c(1,13)], NA2mean))
+
+sum(is.na(dane))
+```
+
+
+#### Zmienna objaśniana
+
+Tak jak wcześniej opisano zmienna opisująca jakość wina jest w skali 0-10. W danym badaniu zdecydowano, że klasyfikacja wina zostanie przeprowadzona w skali dychotomicznej, tzn. zostanie przekształcona tak, żeby przyjmowała tylko dwie wartości:
+
+*  **decent** - oznacza porządne i znakomite wina, których ocena jest większa bądź równa 7
+
+* **average_bad** - oznacza średnie i słabe wina, uznano, że za takie można brać, które dostały oceny mniejsze niż 7
+
+Przed podziałem:
+
+```{r}
+
+dane$type <- as.factor(dane$type)
+
+dane$quality <- ifelse(dane$quality > 6, "decent", "average_bad")
+```
+
+
+```{r echo=FALSE}
+dane$type <- as.factor(dane$type)
+dane$quality <- as.factor(dane$quality)
+```
+
+Po podziale:
+
+```{r}
+table(dane$quality)
+
+```
+
+## Wstępna analiza danych
+
+
+### Statystyki opisowe
+
+
+
+```{r echo=FALSE}
+#statystyki opisowe
+
+#opis danych dlaw wszystkich
+descr_stat <- subset(describe(dane[,c(-1,-13)]), select = -c(n, trimmed, min, max, range, se, mad, vars))
+
+
+kable(descr_stat) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive")) 
+
+```
+
+W przypadku wszystkich zmiennych ich średnie oraz mediany raczej nie różnią się bardzo od siebie, a zatem można podejrzewać, że ich rozkłady są prawdopodobnie symetryczne. W przypadku zmiennych volatile.acidity, residual.sugar, chlorides, free.sulfur.dioxide, total.sulfur.dioxide odchylenie standardowe stanowi dosyć sporą część ich średniej co może świadczyć o dosyć dużym rozproszeniu tych danych wokół średniej. Można zauważyć, że większość cech wykazuje raczej skośność prawostronną, czyli mają dłużsyz prawy ogon. Ciekawy jest również, fakt, że w wielu z nich występuje ujemna kurtoza, czyli dużo zmiennych jest mniej skoncentrowanych w porównaniu do rozkładu normalnego.
+
+
+
+
+
+```{r eval=FALSE, echo= F}
+
+#### Obserwacje **decent**
+
+dane_decent <- dane[which(dane$quality == "decent"),]
+dane_avg_bad <- dane[which(dane$quality == "average_bad"),]
+
+#grupa decent
+
+descr_stat_decent <- subset(describe(dane_decent[,c(-1,-13)]), select = -c(n, trimmed, min, max, range, se, mad, vars))
+
+
+kable(descr_stat_decent) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) 
+```
+
+
+```{r eval=FALSE, echo=F}
+#### Obserwacje **average_bad**
+
+#grupa avg and bad
+descr_stat_avg_bad <- subset(describe(dane_avg_bad[,c(-1,-13)]), select = -c(n, trimmed, min, max, range, se, mad, vars))
+
+
+
+kable(descr_stat_avg_bad) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  scroll_box(height = "400px")
+
+```
+
+### Wykresy pudełkowe
+
+```{r echo=FALSE, fig.align='center'}
+#boxploty
+dane_m <- melt(dane[,-1], id.vars = "quality")
+
+p <- ggplot(data = dane_m, aes(x=variable, y=value)) + 
+  geom_boxplot(aes(fill=quality),outlier.colour = "red", outlier.shape = 1, outlier.size = 1)
+p + facet_wrap( ~ variable, scales="free")
+
+
+```
+Pierwszą kwestią rzucającą się w oczy podczas analizy wykresów pudełkowych jest obecność obserwacji odstających w przypadku wielu zmiennych. Na powyższych wykresach uwzględniono podział na dwie grupy do których dokonuje się klasyfikacji i okazuje się, że w przypadku poszczególnych cech widać pewne różnice w obu grupach. Najbardziej odznaczającą się zmienną jest **alcohol**, tutaj widać wyraźnie różnice, że w grupie **decent** jego stężenie jest wyższe, niż w **average_bad**. Wizualnie można również stwierdzić, że generalnie w przypadku lepszej półki jesli chodzi o wina wariancja jest raczej na niższym poziomie w porównaniu do tej drugiej strony. Można to zobaczyć chociażby analizując obserwacje odstające.
+
+
+### Rozkłady zmiennych
+
+```{r echo=F, fig.align='center'}
+#histogramy
+nazwy <- colnames(dane)
+
+par(mfrow=c(2,2))
+for(i in 2:12){
+  hist(dane[,i], main= nazwy[i], xlab = nazwy[i], probability = T)
+  lines(density(dane[,i]), col="black", lwd=2) # add a density estimate with defaults
+#  lines(density(dane[,i], adjust=2), lty="dotted", col="darkgreen", lwd=2) 
+}
+
+```
+
+W przypadku rozkładów potwierdziło się to co przypuszczano podczas analizy podstawowych statystyk opisowych - większość zmiennnych cechuje się asymetrią prawostronną. To również było widać na wykresach pudełkowych, tzn. więcej obserwacji odstających znajdowało się powyżej trzeciego kwartyla.
+
+### Współczynnik zmienności
+
+```{r echo=FALSE}
+
+wz <- function(kolumna) {
+  wsp_zm <- sd(kolumna)/mean(kolumna)
+  return(wsp_zm)
+}
+#str(dane)
+wsp_zmiennosci <- apply(dane[,c(-1,-13,-14)],2,wz)
+wsp_zmiennosci
+
+
+```
+Zmienna density charakteryzuje się bardzo niską zmienności, jedna ze względu na jej specyfikę zostanie pozostawiona w badaniu.
+
+### Zależności pomiędzy zmiennymi
+
+```{r echo=FALSE, fig.align='center'}
+
+dane_kor <- dane
+dane_kor$type <- as.numeric(dane$type)
+
+
+dane_kor$quality <- as.numeric(dane$quality)
+
+par(mfrow=c(1,1))
+
+colnames(dane_kor) <- c("type","fixed","volatile","citric","sugar","chlorides","free_sul","total_sul","dens","pH","sulphates","alcohol","quality")
+
+corrplot(cor(dane_kor), method = "color")
+cor1 <- cor(dane_kor)
+
+
+kable(round(cor1,2)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive")) 
+
+```
+
+Pomiędzy żadnymi ze zmiennych nie występuje współliniowość.
+
+
+
+```{r echo=FALSE, fig.align='center'}
+#wykresy pomiedzy wszystkimi zmiennymi ilosciowymi
+my_cols <- c("#00AFBB", "#FC4E07")  
+pairs(dane[,c(-1,-13)], pch = 19,  cex = 0.5,
+      col = my_cols[dane$quality],
+      lower.panel=NULL)
+par(xpd = TRUE)
+legend("bottomleft", pch=19, legend=c("average_bad", "decent"), col = my_cols)
+```
+
+
+Na wykresach dosyć ciężko jednoznacznie stwierdzić jakie wartości przyjmują obserwacje dla grupy **decent** lub **average_bad**. Jedynie w przypadku zmiennej alcohol można wizualnie stwierdzić, że to raczej te lepsze wina mają wiekszą zawartość alkoholu (czerwone punkty).
+
+
+### Obserwacje odstające
+
+Jako, że jak wcześniej zauważono w badanym zbiorze danych występują obserwacje odstające. W celu zniwelowania ich negatywnego wpływu podczas przeprowadzonej analizy zostanie wykorzystana funkcja dzięki której wartości nie mieszczące się w przedziale ($Q1 - 1.5*IQR, Q3 + 1.5*IQR$) zostaną zmodyfikowane poprzez zastąpienie ich innymi wartościami. Obserwacje o zbyt małych wartościach zostaną zastąpione wartościami kwantylem rzędu 5/100, natomiast zbyt wysokie kwantylem rzędu 95/100.
+
+
+
+```{r}
+
+#analiza danych odstajacych
+#zrodlo: https://blog.usejournal.com/the-ultimate-r-guide-to-process-missing-or-outliers-in-dataset-65e2e59625c1
+#outlier detection and normalizing
+outlier_norm <- function(x){
+  qntile <- quantile(x, probs=c(.25, .75))
+  caps <- quantile(x, probs=c(.05, .95))
+  H <- 1.5 * IQR(x, na.rm = T)
+  x[x < (qntile[1] - H)] <- caps[1]
+  x[x > (qntile[2] + H)] <- caps[2]
+  return(x)
+}
+
+
+for(i in 2:12){
+  dane[,i]=outlier_norm(dane[,i])
+} 
+```
+
+Wykresy pudełkowe po zastąpieniu obserwacji odstających.
+
+```{r echo=FALSE, fig.align='center'}
+
+#boxploty po usunieciu outlierow
+dane_m <- melt(dane[,-1], id.vars = "quality")
+
+p <- ggplot(data = dane_m, aes(x=variable, y=value)) + 
+  geom_boxplot(aes(fill=quality),outlier.colour = "red", outlier.shape = 1, outlier.size = 1)
+p + facet_wrap( ~ variable, scales="free")
+```
+W porównaniu do wcześniejszej sytuacji wyraźnie widać, że czerwonych punktów oznaczających outliery jest zdecydowanie mniej.
+
+
+## Podział danych
+
+W dalszym etapie przeprowadzono podział zbioru danych na zbiór uczący, czyli służący do budowy danego modelu oraz zbiór testowy, który zostanie wykorzystany do oceny jakości stworzonego modelu. W tym badaniu przyjęto podział 70/30, tzn. w pierwszym ze wspomnianych zbiorów będzie 70% obserwacji, natomiast w drugim znajdzie się pozostałe 30%.
+
+```{r}
+#podzial na zbior treningowy i testowy
+#dane$type <- as.numeric(dane$type)
+
+
+#dane$quality <- as.numeric(dane$quality)
+dane2 = dane
+
+podzial <- createDataPartition(dane2$quality, 
+                               p = 0.70,
+                               list = FALSE)
+dane_ucz  <- dane2[podzial,]
+dane_test <- dane2[-podzial,]
+
+dim(dane_ucz)
+dim(dane_test)
+
+```
+W zbiorze uczącym znalazło się 4548 obserwacji, natomiast w testowym 1949.
+
+
+### Porównanie zbioru uczącego i testowego
+
+Ważnym aspektem by w obu stworzonych zbiorach był podobny odsetek omożliwości jakie może przyjmować zmienna prognozowana. Dzięki temu szansa na zbudowanie dobrego modelu prognostycznego będzie większa.
+
+Odsetek zmiennej prognozowanej przyjmującej wartość **decent** w zbiorze uczącym:
+
+```{r echo=F}
+
+tabela1 <- table(dane_ucz$quality)
+
+tabela2 <-table(dane_test$quality)
+
+decent_percent_uczacy <- tabela1[2]/sum(tabela1)
+decent_percent_uczacy * 100
+```
+Odsetek zmiennej prognozowanej przyjmującej wartość **decent** w zbiorze testowym:
+
+
+```{r echo=F}
+decent_percent_testowy <- tabela2[2]/sum(tabela2)
+decent_percent_testowy * 100
+
+```
+Odsetek w obu zbiorach jest bardzo zbliżony, co jest pozytywnym zjawiskiem.
+
+
+
+Przydatne w ocenie podziału będzie również porównanie wizualne za pomocą wykresów pudełkowych:
+
+```{r echo=F, fig.align='center'}
+#porownanie podzialu za pomoca boxplotu
+
+dane$partition <- rownames(dane)
+
+for(i in 1:nrow(dane)){
+  dane$partition[i] <- ifelse(is.element(i,podzial), "uczacy", "test")
+}
+
+dane_m2 <- melt(dane[,-1], id.vars = c("quality","partition"))
+
+
+ggplot(aes(y = value, x = partition, fill = quality), data = dane_m2) + geom_boxplot()  + facet_wrap( ~ variable, scales="free")
+
+
+```
+Stworzone wykresy pudełkowe potwierdzają, że podział danych został dokonany w sposób prawidłowy. Można stwierdzić, że różnice w rozkładach obu zbiorów są raczej małe.
+
+
+
+## Tuningowanie hiperparametrów
+
+Dane zostały odpowiednio przygotowane do budowy modelu, a zatem można przejść do budowy modeli prognostycznych za pomocą metod uczenia maszynowego. W tej części zostanie zbudowany model z użyciem algorytmu k-najbliższych sąsiadów, a nastepnie przeprowadzone będzie tuningowanie jego hiperparametrów. Polega ono na sprawdzeniu jakości zbudowanego modelu przy różnych kombinacjach możliwych do wyboru parametrów. W ten sposób można otrzymać najlepszy możliwy w danym przypadku model prognostyczny.
+
+
+W przypadku metody k-najbliższych sąsiadów tuningowanym parametrem będzie parametr **k**, który określa ilość obiektów na podstawie których klasyfikowany obiekt ma zostać sklasyfikowany. Dobór odpowiedniej wielkości tego parametru w tej metodzie jest dosyć dużym problemem praktycznym, jako że zbyt mała ilość rozważanych sąsiadów powoduje, że nabierają znaczenia niewielkie szumy w danych, a z kolei zbyt duża ilość sąsiadów powoduje zbytnie "wygładzenie" wyników, co przekłada się na trudności z uczeniem rzadkich wzorców. Tuningowanie pozwoli w dosyć przyzwoity sposób poradzić sobie z tym problemem.
+
+W tym wypadku tuningowanie hiperparametrów zostanie dokonane za pomocą cross-validation (sprawdzianu krzyżowego) dla k=10 (podział zbioru na 10 grup) powtórzonego trzy razy.
+
+```{r}
+#dla wybranej techniki ML przeprowadzic tuningowanie hiperparametrow
+
+
+fitcontrol0 <- trainControl(method = "none", 
+                            classProbs = TRUE)
+
+# uzywam cv z powtorzeniami 
+# (dziele zestaw wg cv "repeats" razy)
+
+fitControl2 <- trainControl(method = "repeatedcv",
+                            number = 10, repeats = 3)
+
+```
+
+Na początku stworzono model KNN bez tuningowania o parametrze k równym 5.
+
+```{r}
+# Za budowe modelu odpowiada funkcja train(). 
+# Jej konstrukcja jest nastepujaca:
+
+# 1. Buduje model bez tuningowania hiperparametrow
+
+
+knn_model <- train(quality ~ .,               # Y ~ X
+                   data = dane_ucz,                   # zestaw danych
+                   method = "knn",                  # metoda
+                   preProc = "scale",  # wstepne przeksztalcenia danych
+                   trControl = fitcontrol0,         # sposob walidacji (brak)
+                   tuneGrid = data.frame(k = 7))    # wybieram parametry modelu
+
+
+
+# Buduje prognoze i wyznaczam wyniki
+knn_pr <- predict(knn_model, dane_test)
+confusionMatrix(knn_pr,dane_test$quality)
+
+```
+Osiągnał on ACC na poziomie około 83% dla danych testowych, co jest dosyć zadowalającym wynikiem. Jednak parametr ten został przyjęty jedynie intuicyjnie, być może istnieje k dla którego dokładność będzie jeszcze lepsza, co zostanie sprawdzone poprzez tuningowanie. 
+
+Zostaną sprawdzone wyniki dla k od 1 do 12.
+
+
+```{r}
+
+sasiedzi <- expand.grid(k = 3:12) 
+# funkcja pozwala na budowe wybranych parametrow
+
+knn_model2 <- train(quality ~ .,               
+                    data = dane_ucz,                   
+                    method = "knn",                  
+                    preProc = "scale",  
+                    trControl = fitControl2,
+                    tuneGrid = sasiedzi)   # tutaj mam argument na "swoje" parametry
+
+knn_model2
+
+#tutaj k = 11
+
+
+# Buduje prognoze i wyznaczam wyniki
+knn_pr2 <- predict(knn_model2, dane_test)
+confusionMatrix(knn_pr2,dane_test$quality)
+
+```
+Jak się okazuje dobór parametru k za pomocą tuningowania pokazał, że najlepszym wyborem będzie k = 3. Dokładność osiągnięta w tym wypadku jest prawie taka sama do tej z k = 5. Także w tym wypadku ciężko określić, które k będzie lepsze. Być może lepszą decyzją będzie wybór mniejszego k, jako że dzięki temu model będzie szybszy obliczeniowo niż w porównaniu do większych wartości k.
+
+
+# Część 2
+
+## Wstęp do części 2
+
+W drugiej części zostaną wykonane opisy wybranych technik uczenia maszynowego, a następnie stworzone na ich podstawie modele prognostyczne. Następnie zostaną one porównane za pomocą kilku sposobów oceny jakości modelu i na tej podstawie zostanie wybrany najlepszy model dla badanych danych dotyczących wina.
+
+## Opis wybranych technik uczenia statystycznego
+
+### KNN
+
+Algorytm k-najbliższych sąsiadów (KNN - k-nearest neighbors) to dosyć prosta i łatwa w implementacja metoda uczenia maszynowego z nadzorem, która może służyć zarówno do klasyfikacji i regresji (W tym przypadku rozważana jest klasyfikacja za pomocą tej metody). Uczenie maszynowe z nadzorem oznacza, że dane uczące przed wprowadzeniem do modelu mają już nadane etykiety, dzięki czemu model może się nauczyć w jaki sposób klasyfikować lub prognozować przyszłe obserwacje nie mające jeszcze przypisanej etykiety.
+
+Metoda ta zakłada, że obserwacje o takich samych etykietach występują w bliskim otoczeniu. Bliskość obserwacji oznacza w tym przypadku minimalizacje pewnej metryki mierzącej odległość pomiędzy wektorami zmiennych objaśniających dwóch obserwacji np. odległość euklidesowa.
+
+Algorytm metody k-najbliższych sąsiadów działa w nastepujący sposób:
+
+1. Wybór k, czyli liczby sąsiadów, z którymi będzie porównywana dana obserwacja  
+2. Policzenie odległości pomiędzy wybraną obserwacją, a pozostałymi obserwacjami  
+3. Posortowanie odległości z punktu 2 od najmniejszych do największych
+4. Wybór k najmniejszych odległości  
+5. Sprawdzenie etykiet wybranych obserwacji z punktu 4  
+6. W przypadku klasyfikacji wybór dominanty sprawdzanych etykiet i przyporządkowanie do badanej obserwacji  
+
+Największym problemem praktycznym w przypadku tej metody jest wybór właściwej wartości k.
+
+### KKNN
+
+KKNN - metoda ważonych odległości najbliższych sąsiadów (Weighted k-Nearest Neighbor Classifier) jest pewnym udoskonaleniem wcześniej wymienionej KNN. Mianowicie, w tym przypadku klasyfikacja nie zależy wyłącznie od samej obecności sąsiada w grupie najbliższych dla danej obserwacji, ale także od jego odległości do klasyfikowanego obiektu. W zależności od bliskości do klasyfikowanego obiektu nadawane są wagi poszczególnym sąsiadom co ostatecznie wpływa na to jaką etykietę otrzyma dana obserwacja.
+
+
+### LDA
+
+LDA - liniowa analiza dyskryminacyjna (linear discriminant analysis) jest techniką bazującą na redukcji wymiarów, a jednocześnie uzyskiwaniu w ten sposób najwięcej informacji o obserwacjach jak to możliwe. Jest to narzędzie używane do klasyfikacji, redukcji wymiarów, a także wizualizacji danych. W metodzie tej zakłada się, że poszczególne klasy (grupy) mają jednakowe macierze VCOV oraz pochodzą z wielowymiarowych rozkładów normalnych.
+
+Kroki postępowania tej metody wyglądają następująco:
+
+1. Obliczenie wewnątrzklasowych i międzyklasowych macierzy odległości pomiędzy obserwacjami
+2. Obliczenie wektorów własnych i odpowiadających im wartości własnych dla macierzy z punktu 1
+3. Posortowanie wartości własnych i wybranie najlepszego k
+4. Stworzenie nowej macierzy zawierającej wektory własne odpowiadające k wartościom własnym
+5. Stworzenie linii dyskryminacyjnych LDA poprzez iloczyn skalarny cech oraz wektorów własnych z macierzy stworzonej w punkcie 4.
+
+### QDA
+
+QDA - kwadratowa analiza dyskryminacyjna (quadratic discriminant analysis) jest zmodyfikowaną techniką LDA, gdzie różnicą jest to, że linie dyksryminacyjne w tym wypadku nie muszą mięc kształtu prostej i mogą być np. parabolą czy kołem. W porównaniu do poprzedniej metody jest ona bardziej elastyczna i wykorzystuje się ją w sytuacji, gdy założenie o stałości kowariancji nie jest spełnione (każda grupa ma swoją macierz VCOV odmienną od pozostałych grup).
+
+### Regresja logitowa
+
+Regresja logistyczna (logistic regression) to model statystyczny bazujący na funkcji logarytmicznej zazwyczaj o zmiennej zależnej dychotomicznej, tzn. przyjmującej dwie wartości (najczęściej 0 i 1). Przykładem może być prognoza lub klasyfikacja wystąpienia pewnego zjawiska np. choroba lub brak choroby. W przeciwieństwie do regresji liniowej gdzie najczęściej korzystą się z metody najmniejszych kwadratów w regresji logistycznej używa się metodę największej wiarygodności gdyż bazuje się w tego typu regresji na prawdopodobieństwie, które jest przekształcane na logarytm szansy, czyli logit. Natomiast szansa jest rozumiana jako stosunek prawdopodobieństwa sukcesu do prawdopodobieństwa porażki.
+
+### Regresja probitowa
+
+Regresja probitowa to odmiana regresji logistycznej i jest używana do rozwiązywania problemów w tych samych zakresach - klasyfikacji i regresji. Różnicą w tym przypadku jest to, że funkcja używana w określeniu wyniku nie ma tak jak w przypadku regresji logitowej postaci funkcji logarytmicznej, a dystrybuanty rozkładu normalnego. Zamiast logarytmu szansu, czyli logitu, stosuje się w tej metodzie odwrotną dystrybuantę rozkładu normalnego tzw. probit.
+
+
+### Drzewo decyzyjne
+
+Drzewa decyzyjne to kolejna technika uczenia maszynowego z nadzorem używana do rozwiązywania problemów z zakresu zarówno klasyfikacji jak i regresji. Nazwa tej metody nawiązuje do sposobu jego konstrukcji, gdyż jest to pewien ciąg reguł decyzjnych prowadzących do ostatecznego wyniku. Taki ciąg tworzy strukturę przypominającą drzewo na którą składają się elementy: korzeń, węzły, gałęzie oraz liście. Jest to bardzo popularna metoda ze względu na niewielką złożoność oraz łatwą w interpretacji graficzną reprezentację. 
+
+Drzewa decyzyjne budowane są z wykorzystaniem algorytmu rekurencyjnego, gdzie w zależności od tego czy spełniony został warunek stopu, decyduje się o utworzeniu liścia opatrzonego etykietą, bądź też węzła z zawartym w nim testem. Docelowo poszukiwany atrybut w zbiorze testów jest taki, który powoduje największy przyrost informacji, co zapobiega nadmiernemu rozrośnięciu się drzewa, a w efekcie do jego przeuczeniu. Najpowszechniej stosowanym przy doborze testu wskaźnikiem jest wykorzystujący entropię współczynnik przyrostu informacji. 
+
+Algorytm rekurencyjny stosowany w drzewach decyzyjnych:
+1. Start drzewa w korzeniu zawierającego cały zestaw danych.
+2. Znalezienie w danym zestawie atrybutu o największej informacji np. na podstawie entropii.
+3. Podział korzenia na zbiory na podstawie atrybutu z kroku 2.
+4. Ponowne generowanie węzła zawierającego atrybut o największej informacji w kolejnych zbiorach.
+5. Dalszy rekurencyjny podział na mniejsze zbiory analogicznie do poprzednich kroków aż do osiągnięcia warunku stopu.
+
+
+## Przygotowanie danych - normalizacja
+
+Przed przystąpieniem do tworzeniu modeli przeprowadzono jeszcze normalizację danych - w tym wypadku jest to standaryzacja.
+
+```{r echo= F}
+#knn
+#str(dane_ucz)
+dane_ucz_st <- dane_ucz
+dane_ucz_st[,c(-1,-13)] <- data.Normalization(dane_ucz[,c(-1,-13)], type = "n1")
+
+
+#str(dane_ucz_st)
+
+dane_test_st <- dane_test
+dane_test_st[,c(-1,-13)] <- data.Normalization(dane_test[,c(-1,-13)], type = "n1")
+
+#  W KNN KATEGORYCZNE TRZEBA ZAMIENIC NA NUMERYCZNE, BO NIE ZADZIALA INACZEJ :/
+dane_ucz_st$type <- as.integer(dane_ucz_st$type)
+#str(dane_ucz_st)
+
+dane_test_st$type <- as.integer(dane_test_st$type)
+#str(dane_test_st)
+
+
+testowy <- dane_test_st
+uczacy <- dane_ucz_st
+
+```
+
+Dane po standaryzacji:
+
+```{r echo=F}
+
+kable(head(dane_ucz_st)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive"))
+
+
+```
+
+## Budowa modeli uczenia statysycznego
+
+### KNN
+
+Pierwszy stworzony model prognostyczny będzie stworzony w oparciu o technikę KNN.
+```{r message=FALSE, fig.align='center'}
+ACC_KNN <- c()
+
+for (i in 1:15){
+  model_knn <- knn(uczacy[,-13], testowy[,-13], cl = uczacy$quality, k = i)
+  summary(model_knn)
+  
+  
+  table_knn<-table(predykcja = model_knn, prawdziwe = testowy$quality)
+  table_knn
+  
+  #dokladnosc
+  accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+  
+  
+  ACC_KNN[i]  <- accuracy(table_knn)
+  ACC_KNN[i]
+}
+
+plot(ACC_KNN, type = "b")
+#najlepszy dla k=3
+```
+Do wyboru parametru k posłużono się wykresem dokładności w zależności od wartości tego parametru. Najlepszy okazuje się być k = 1, jednak nie jest on brany pod uwagę ze względu na możliwy spadek jakości prognozy gdyby w danych były szumy. Z tego względu zdecydowano, że zostanie wybrany drugi najlepszy parametr na wykresie czyli k = 3, taki sam wynik dało również wcześniej tuningowanie, na czym również można opierać ten wybór.
+
+
+```{r message=FALSE}
+model_knn <- knn(uczacy[,-13], testowy[,-13], cl = uczacy$quality, k = 3)
+table_knn<-table(predykcja = model_knn, prawdziwe = testowy$quality)
+table_knn
+ACC_KNN[3]
+
+```
+
+
+```{r message=FALSE}
+#specyficznosc KNN
+
+spec_KNN <- table_knn[2,2]/(table_knn[2,2]+table_knn[2,1])
+spec_KNN
+```
+Dokładność tego modelu wynosi około 83%, co jest dosyć zadowalającym wynikiem. Jednak należy zwrócić uwagę, że w przypadku specyficzności wynik już nie jest taki dobry. W tym przypadku obserwacja klasy **decent** została poprawnie sklasyfikowana jedynie w 58% przypadkach.
+
+### KKNN
+
+Drugi model zostanie stworzony dzięki zastosowaniu KKNN.
+
+```{r warning=F}
+
+uczacy$type <- as.factor(uczacy$type)
+uczacy$quality <- as.factor(uczacy$quality)
+
+testowy$type <- as.factor(testowy$type)
+testowy$quality <- as.factor(testowy$quality)
+
+#w kknn juz wbudowane jest wybieranie najlepszego k, w tym wypadku wybralo k=7
+model_kknn <- train.kknn(formula = quality~., data = uczacy, kmax = 10)
+#model_kknn
+kknn_pred <- predict(model_kknn,testowy[,-13])
+
+table_kknn<-table(predykcja = kknn_pred, prawdziwe = testowy$quality)
+table_kknn
+
+ACC_KKNN  <- accuracy(table_kknn)
+ACC_KKNN
+
+```
+
+```{r message=FALSE}
+#specyficznosc
+
+spec_KKNN <- table_kknn[2,2]/(table_kknn[2,2]+table_kknn[2,1])
+spec_KKNN
+```
+W przypadku KKNN jest nieco lepiej w porównaniu do KNN. Zarówno dokładność jak i specyficzność osiągnęły lepsze wartości.
+
+### LDA
+
+Kolejna metoda to liniowa analiza dyskryminacyjna. Założono, że grupy mają wielowymiarowy rozkład normalny oraz takie same macierze VCOV.
+
+```{r}
+
+#lda
+lda<-lda(uczacy$quality~.,uczacy)
+prog.lda.t<-predict(lda,testowy)
+
+mac.tes<-table(prog.lda.t$class,testowy$quality)
+mac.tes
+ACC.tes<-accuracy(mac.tes)
+ACC.tes
+
+```
+```{r message=FALSE}
+#specyficznosc
+
+spec_LDA <- mac.tes[2,2]/(mac.tes[2,2]+mac.tes[2,1])
+spec_LDA
+```
+
+Również w metodzie liniowej analizy dyksryminacyjnej otrzymano bardzo zbliżone wyniki w porównaniu do wcześniejszych.
+
+
+### QDA
+
+Kwadratowa analiza dyskryminacyjna - tutaj również założono, że grupy mają wielowymiarowy rozkład normalny.
+
+```{r}
+#qda
+qda<-qda(uczacy$quality~., uczacy)
+
+prog.qda.t<-predict(qda,testowy)
+mac.qda.t<-table(prog.qda.t$class,testowy$quality)
+mac.qda.t
+ACC.qda.tes<-accuracy(mac.qda.t)
+ACC.qda.tes
+
+```
+```{r message=FALSE}
+#specyficznosc
+
+spec_QDA <-mac.qda.t[2,2]/(mac.qda.t[2,2]+mac.qda.t[2,1])
+spec_QDA
+```
+Kwadratowa analiza dyskryminacyjna okazuje się mieć najsłabsze wyniki spośród jak dotąd przeprowadzonych.
+
+
+### Regresja logistyczna
+
+Kolejny model zostanie stworzony za pomocą regresji logistycznej.
+
+```{r}
+#logit
+regresja_log <- glm(quality~., family =binomial, data=uczacy)
+
+summary(regresja_log)
+
+```
+
+Stworzona regresja logistyczna okazuje się mieć jedną zmienną nieistotną **citric acid**. Zostanie ona odrzucona, a model wyestymowany ponownie.
+
+
+```{r}
+
+#wyrzucam zmienna citric acid
+regresja_log <- glm(quality~ type + fixed.acidity + volatile.acidity + residual.sugar + chlorides + free.sulfur.dioxide + total.sulfur.dioxide + density + pH + sulphates  + alcohol, family =binomial, data=uczacy)
+
+summary(regresja_log)
+
+```
+
+Kolejny wyestymowany model ma już wszystkie zmienne istotne, zatem to na nim będzie przeprowadzana prognoza. 
+
+
+```{r}
+
+pred_log <- predict(regresja_log, testowy, type = "response")
+
+glm.pred <- ifelse(pred_log > 0.5, "decent", "average_bad")
+
+
+mac_log <- table(glm.pred, testowy$quality)
+mac_log
+
+
+acc_log <- accuracy(mac_log)
+acc_log
+
+
+```
+Dokładność jest na podobnym poziomie co w poprzednich modelach.
+
+
+```{r message=FALSE}
+#specyficznosc
+
+spec_LOG <-mac_log[2,2]/(mac_log[2,2]+mac_log[2,1])
+spec_LOG
+```
+Również specyficzność znacznie się nie różni w porównaniu do wcześniej otrzymanych.
+
+
+### Regresja probitowa
+
+Dla porównania zostanie również stworzony model za pomocą regresji probitowej.
+
+```{r}
+#probit
+
+regresja_probit <- glm(quality~., family =binomial(link = "probit"), data=uczacy)
+
+summary(regresja_probit)
+
+```
+
+Tak jak w przypadku regresji logistycznej zmienna **citric acid** okazuje się być nieistotna i analogicznie jak poprzednio zostanie ona usunięta.
+
+```{r}
+#wyrzucam zmienna citric acid
+
+regresja_probit <- glm(quality~ type + fixed.acidity + volatile.acidity + residual.sugar + chlorides + free.sulfur.dioxide + total.sulfur.dioxide + density + pH + sulphates  + alcohol, family =binomial(link = "probit"), data=uczacy)
+
+summary(regresja_probit)
+```
+Wszystkie zmienne są istotne zatem na tym modelu zostanie przeprowadzona ocena jego jakości.
+
+
+```{r}
+pred_probit <- predict(regresja_probit, testowy, type = "response")
+
+glm.pred_probit <- ifelse(pred_probit > 0.5, "decent", "average_bad")
+
+
+mac_probit <- table(glm.pred_probit, testowy$quality)
+mac_probit
+
+acc_probit <- accuracy(mac_probit)
+acc_probit
+
+```
+
+```{r message=FALSE}
+#specyficznosc
+spec_PRO <-mac_probit[2,2]/(mac_probit[2,2]+mac_probit[2,1])
+spec_PRO
+```
+Regresja probitowa uzyskała prawie identyczne wyniki jak regresja logistyczna jeśli chodzi o miary dokładności i specyficzności.
+
+
+
+### Drzewo decyzyjne
+
+Ostatni model zostanie stworzony przy wykorzystaniu techniki drzewa decyzjnego. W tym wypadku zostaną wykorzystane dane niepoddane normalizacji.
+
+```{r fig.align='center', warning=F, message=FALSE}
+#drzewo decyzyjne
+drzewo <- rpart(quality~., data=dane_ucz, control=rpart.control(cp=0.01))
+
+printcp(drzewo)   
+plotcp(drzewo)
+
+index<-which.min(drzewo$cptable[,"xerror"]) 
+CP<-drzewo$cptable[index,"CP"]
+drzewo.final<-prune(drzewo,cp=CP)
+
+rpart.plot(drzewo.final,uniform=T,cex=0.5, type=4,clip.right.labs=T, branch = .6)
+
+# prognoza drzewa decyzyjnego
+drzewo.predict<-predict(drzewo.final,
+                        newdata=dane_test,
+                        type="class")
+drzewo.pr.u <- predict(drzewo.final, 
+                       newdata = dane_test,  
+                       type = "prob")
+#tab_drzewo_prognoza<-table(dane_test$quality,drzewo.predict)
+ROC_drzewo.predict<-roc(dane_test$quality,drzewo.pr.u[,1])
+
+```
+
+
+
+```{r}
+tab.drz.u  <- table(dane_test$quality,drzewo.predict)
+tab.drz.u
+ACC.drz.u  <- accuracy(tab.drz.u)
+ACC.drz.u 
+```
+
+
+
+```{r}
+#specyficznosc
+spec_TREE <-tab.drz.u[2,2]/(tab.drz.u[2,2]+tab.drz.u[2,1])
+spec_TREE
+```
+Drzewo decyzyjne również osiągneło bardzo podobny wynik w kwestii dokładności, jednak zdecydowanie bardzo słabo wypadło jeśli chodzi o specyficzność.
+
+## Ocena jakości modeli
+
+### Wykresy krzywych ROC wszystkich modeli na jednym wykresie
+
+```{r echo=F, fig.align='center', message=F,warning=FALSE, error = F}
+#wybrac najlepszy model i zinterpretowac uzyskane wyniki
+
+
+#####################################
+#Wykresy ROC 
+par(pty = "s") 
+#KNN
+#ROC_KNN
+roc.knn  <- roc(testowy$quality,as.ordered(model_knn),legacy.axes = TRUE)
+#lda ROC 
+roc.lda<-roc(testowy$quality, prog.lda.t$posterior[,1], legacy.axes = TRUE) 
+#qda ROC 
+roc.qda<-roc(testowy$quality, prog.qda.t$posterior[,1], legacy.axes = TRUE) 
+#drzewo decyzyjne 
+#ROC.drz.u 
+roc.drzewo<-roc(dane_test$quality, drzewo.pr.u[,1], legacy.axes = TRUE) 
+
+#logit
+ROC_log  <- roc(testowy$quality,as.ordered(glm.pred), legacy.axes = TRUE)
+
+#probit
+ROC_probit  <- roc(testowy$quality,as.ordered(glm.pred_probit), legacy.axes = TRUE)
+
+ROC_KKNN  <- roc(testowy$quality,as.ordered(kknn_pred), legacy.axes = TRUE)
+
+
+# Krzywe ROC na jednym wykresie 
+plot(roc.lda, col = "green") 
+plot(roc.qda, add = TRUE, col="red") 
+plot(roc.drzewo, add = TRUE, col="blue") 
+plot(roc.knn, add = TRUE, col="black") 
+plot(ROC_log, add = TRUE, col="orange")
+plot(ROC_probit, add = TRUE, col="yellow")
+plot(ROC_KKNN, add = TRUE, col="pink")
+
+legend("topright", legend=c("LDA", "QDA", "Drzewo", "KNN", "Logistyczna", "Probit","KKNN"),
+       col=c("green", "red","blue","black","orange","yellow","pink"), lty=1, cex=0.8,
+       box.lty=2, box.lwd=2)
+```
+
+
+### Pole AUC pod krzywymi ROC 
+
+```{r echo=F, fig.align='center'}
+
+wyniki_AUC <- as.data.frame(matrix(NA, 7,2))
+
+modele_nazwy <- c("KNN", "KKNN","drzewo decyzyjne", "LDA", "QDA", "R.logitowa", "R.probitowa")
+wyniki_AUC[,1] <- modele_nazwy
+
+
+colnames(wyniki_AUC) <- c("Model", "AUC")
+
+AUC_KKNN  <- auc(ROC_KKNN)[1]
+
+AUC.lda <- auc(roc.lda)[1] 
+#AUC.lda 
+AUC.qda <- auc(roc.qda)[1] 
+#AUC.qda 
+AUC.drzewo <- auc(roc.drzewo)[1] 
+#AUC.drzewo 
+AUC.knn <- auc(roc.knn)[1] 
+#AUC.knn
+AUC.logit <- auc(ROC_log)[1] 
+#AUC.logit 
+AUC.probit <- auc(ROC_probit)[1] 
+#AUC.probit
+
+
+wyniki_AUC[1,2] <- AUC.knn
+wyniki_AUC[2,2] <- AUC_KKNN
+wyniki_AUC[3,2] <- AUC.drzewo
+wyniki_AUC[4,2] <- AUC.lda
+wyniki_AUC[5,2] <- AUC.qda
+wyniki_AUC[6,2] <- AUC.logit
+wyniki_AUC[7,2] <- AUC.probit
+
+kable(wyniki_AUC) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive"))
+
+```
+
+
+```{r echo = F}
+
+ggplot(wyniki_AUC, aes(x=Model, y=AUC, fill=Model)) + 
+  geom_bar(stat="identity")+
+  scale_fill_brewer(palette="Dark2")
+
+```
+
+
+
+Najlepsze wyniki jeśli chodzi o AUC uzyskały modele analizy dyskryminacyjnej tj. LDA i QDA, zaraz za nimi znajduje się model drzewa decyzyjnego, następnie modele stworzone za pomocą algorytmów k-najbliższych sąsiadów. W tym przypadku regresje logitowa i probitowa uzyskały najgorsze wyniki.
+
+
+### Dokładność
+
+```{r, echo=F, fig.align='center'}
+
+#macierz i wykresy z najlepszym ACC dla poszczegolnych modeli
+
+wyniki <- as.data.frame(matrix(NA, 7,2))
+
+modele_nazwy <- c("KNN", "KKNN","drzewo decyzyjne", "LDA", "QDA", "R.logitowa", "R.probitowa")
+wyniki[,1] <- modele_nazwy
+
+
+colnames(wyniki) <- c("Model", "Accuracy")
+
+wyniki[1,2] <- ACC_KNN[3]
+wyniki[2,2] <- ACC_KKNN
+wyniki[3,2] <- ACC.drz.u
+wyniki[4,2] <- ACC.tes
+wyniki[5,2] <- ACC.qda.tes
+wyniki[6,2] <- acc_log
+wyniki[7,2] <- acc_probit
+
+
+kable(wyniki) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive"))
+
+```
+
+
+```{r}
+
+ggplot(wyniki, aes(x=Model, y=Accuracy, fill=Model)) + 
+  geom_bar(stat="identity")+
+  scale_fill_brewer(palette="Dark2")
+
+```
+
+
+Jeśli chodzi o dokładność poszczególnych modeli to tak jak wspominano wcześniej wszystkie uzyskały bardzo zbliżone względem siebie wyniki. Ostatecznie modelem zwycięzcą w tym aspekcie okazał się być model stworzony za pomocą techniki KKNN.
+
+
+### Specyficzność
+
+```{r,echo=F, fig.align='center'}
+#specyficznosc
+#macierz i wykresy z najlepszym TFR dla poszczegolnych modeli
+
+wyniki <- as.data.frame(matrix(NA, 7,2))
+
+modele_nazwy <- c("KNN", "KKNN","drzewo decyzyjne", "LDA", "QDA", "R.logitowa", "R.probitowa")
+wyniki[,1] <- modele_nazwy
+
+
+colnames(wyniki) <- c("Model", "Specificity")
+
+wyniki[1,2] <- spec_KNN * 100
+wyniki[2,2] <- spec_KKNN * 100
+wyniki[3,2] <- spec_TREE * 100
+wyniki[4,2] <- spec_LDA * 100
+wyniki[5,2] <- spec_QDA * 100
+wyniki[6,2] <- spec_LOG * 100
+wyniki[7,2] <- spec_PRO * 100
+
+kable(wyniki) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "responsive"))
+```  
+  
+```{r echo=FALSE}
+
+ggplot(wyniki, aes(x=Model, y=Specificity, fill=Model)) + 
+  geom_bar(stat="identity")+
+  scale_fill_brewer(palette="Dark2")
+
+```
+
+
+W porównaniu do wartości AUC lub accuracy w przypadku specificity uzyskano o wiele ciekawsze wyniki. Najbardziej interesujący jest fakt, że w przypadku modelu opartym na drzewie decyzyjnym wartość specyficzności wynosi jedynie około 27%. Jest to bardzo niezadowolający wynik, gdyż oznacza to, że jedynie około 27% przypadków klasy **decent** zbioru testowego zostało sklasyfikowano poprawnie. Model oparty na technice QDA również odstaje trochę od reszty, gdyż pozostałe modele uzyskały już raczej podobne wyniki oscylujące wokół 60%. Podobnie jak w przypadku dokładności nieznaczne zwycięstwo odniosła technika KKNN.
+
+## Podsumowanie i wybór najlepszego modelu
+
+**Biorąc pod uwagę powyższe wyniki można stwierdzić, że najlepszym modelem w klasyfikacji wina pod względem jego jakości biorąc pod uwagę jego właściwości fizykochemiczne oraz typ (białe, czerwone) jest ten oparty na metodzie KKNN**. Uzyskał on najlepsze wyniki zarówno jeśli chodzi o dokładność, a także specyficzność. Również jeśli chodzi o AUC to jego wynik nie odstawał bardzo od tych, które w tym aspekcie wypadły lepiej. 
+Należy jednak zaznaczyć, że pozostałe modele także uzyskały dosyć zadowalające wyniki jeśli chodzi o jakość ich prognozowania. Można uznać, że jedynie model oparty na drzewie decyzyjny troche większy w sposób odstawał od reszty, zwłaszcza jeśli chodzi o jego specyficzność. Tak niska skuteczność w klasyfikacji wina do grupy **decent** jest bardzo negatywnym faktem.
+
+
+Podsumowując ogólną jakość klasyfikacji wszystkich modeli można uznać, że zdecydowana większość uzyskała zadowalające wyniki w klasyfikacji wina pod względem jakości. Biorąc pod uwagę taką sytuację można stwierdzić, że ocena jakości wina bez udziału eksperta winiarskiego jest możliwe, chociaż jednak jest obecny pewien margines błędu.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
